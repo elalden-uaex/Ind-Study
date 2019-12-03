@@ -1,0 +1,185 @@
+<html>
+  <head>
+    <title>deck.gl HexagonLayer Example</title>
+
+    <script src="https://unpkg.com/deck.gl@^7.0.0/dist.min.js"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v0.50.0/mapbox-gl.js"></script>
+
+    <style type="text/css">
+      body {
+        font-family: Helvetica, Arial, sans-serif;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+      }
+
+      #control-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 12px;
+        padding: 20px;
+        font-size: 12px;
+        line-height: 1.5;
+        z-index: 1;
+        background: #fff;
+        font-family: Helvetica, Arial, sans-serif;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
+      }
+
+      label {
+        display: inline-block;
+        width: 140px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="control-panel">
+      <div>
+        <label>Radius</label>
+        <input id="radius" type="range" min="1000" max="20000" step="1000" value="1000"></input>
+        <span id="radius-value"></span>
+      </div>
+      <div>
+        <label>Coverage</label>
+        <input id="coverage" type="range" min="0" max="1" step="0.1" value="1"></input>
+        <span id="coverage-value"></span>
+      </div>
+      <div>
+        <label>Upper Percentile</label>
+        <input id="upperPercentile" type="range" min="90" max="100" step="1" value="100"></input>
+        <span id="upperPercentile-value"></span>
+      </div>
+    </div>
+  </body>
+
+  <script type="text/javascript">
+
+    const {DeckGL, HexagonLayer} = deck;
+
+    const deckgl = new DeckGL({
+      mapboxApiAccessToken: 'pk.eyJ1IjoiZWxhbGRlbiIsImEiOiJjazFndDBubWkwMDQ4M25xajR2OTZhcnU0In0.daJrZmKDBU42uDU1EZuIBA',
+      mapStyle: 'mapbox://styles/mapbox/dark-v9',
+      longitude: -92.3407192,
+      latitude: 34.7263117,
+      zoom: 6,
+      minZoom: 5,
+      maxZoom: 15,
+      pitch: 40.5
+    });
+
+    let data = null;
+
+    const OPTIONS = ['radius', 'coverage', 'upperPercentile'];
+
+    const COLOR_RANGE = [
+      [1, 152, 189],
+      [73, 227, 206],
+      [216, 254, 181],
+      [254, 237, 177],
+      [254, 173, 84],
+      [209, 55, 78]
+    ];
+
+    OPTIONS.forEach(key => {
+      document.getElementById(key).oninput = renderLayer();
+    });
+
+    function renderLayer () {
+      const options = {};
+      OPTIONS.forEach(key => {
+        const value = document.getElementById(key).value;
+        document.getElementById(key + '-value').innerHTML = value;
+        options[key] = Number(value);
+      });
+
+      const hexagonLayer = new HexagonLayer({
+        id: 'heatmap',
+        colorRange: COLOR_RANGE,
+        data,
+		//elevationDomain: [0, (max(scrubbed.time)-avg(scrubbed.time))],
+        elevationRange: [0, 1000],
+        elevationScale: 250,
+        extruded: true,
+        getPosition: d => d,
+	//	elevationDomain:[0,Math.avg(time)],
+        opacity: 1,
+        ...options
+      });
+
+      deckgl.setProps({
+        layers: [hexagonLayer]
+      });
+    }
+ var scrubbed = [{
+		"lat": "",
+        "lngitude": "",
+        "time": ""
+ }];
+
+   d3.csv("data.csv", function(d) {
+  return {
+    lat: +d.lat, // convert "Length" column to number
+	lngitude: +d.lng, // convert "Length" column to number
+	time: +d.time
+  }; 
+}).then(
+
+function(data){
+ //initialize and array to hold locations user stayed longer than 15min
+  var i =0;
+
+  for(i=0;i<data.length; i++){//loop thru data array finding places that I stayed longer than 15min
+	if( data[i].lat!= null  && data[i].lngitude!= null && data[i].time != null){
+		var startLat = data[i].lat;				//create the initial variables to be tested against in the following loop
+		var startLong = data[i].lngitude;
+		var startTime =data[i].time;
+	    
+		var k=i;				//create the initial index to start test to see how long user stayed in location
+		var tempLat =data[k].lat;
+		var tempLong = data[k].lngitude;
+		
+		for(k=i;k<data.length;k++){
+			//while(((tempLat<startLat+0.0001 && tempLat>startLat-0.0001) && (tempLong<startLong+0.0001 && tempLong>startLong-0.0001)) && k<data.length-1){//loop until a value is found that is more than 50 meters away from the location of data[i]
+			if(((tempLat<startLat+0.000001 && tempLat>startLat-0.000001) && (tempLong<startLong+0.000001 && tempLong>startLong-0.000001))){
+				if( (data[k].lat!= null)  && (data[k].lngitude!= null) && data[k].time!= null)	{	//push test index foward
+					tempLat =data[k].lat;
+					tempLong = data[k].lngitude;
+					var endTime = data[k].time;			
+				}
+			}
+			else
+				break;
+		}//end comparison loop
+	
+			var testTime = endTime - startTime;		//var holding difference between starting time and ending time
+	
+			if(testTime>900){
+				console.log("data has been pushed");
+				scrubbed.push(data[k]);
+				scrubbed[scrubbed.length-1].time = testTime;
+			}
+		}
+		
+	
+
+		i=k;
+
+  }//end total array loop
+  data=scrubbed;
+},
+
+response => {
+	//data =scrubbed;
+	console.log(data);
+		data = response.map(d => [d.lngitude, d.lat]);
+       renderLayer();
+    });
+
+
+
+  </script>
+</html>

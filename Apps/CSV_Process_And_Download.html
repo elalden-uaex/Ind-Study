@@ -1,0 +1,343 @@
+<html>
+  <head>
+    <title>deck.gl HexagonLayer Example</title>
+
+    <script src="https://unpkg.com/deck.gl@^7.0.0/dist.min.js"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v0.50.0/mapbox-gl.js"></script>
+
+    <style type="text/css">
+      body {
+        font-family: Helvetica, Arial, sans-serif;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+      }
+
+      #control-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 12px;
+        padding: 20px;
+        font-size: 12px;
+        line-height: 1.5;
+        z-index: 1;
+        background: #fff;
+        font-family: Helvetica, Arial, sans-serif;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
+      }
+
+      label {
+        display: inline-block;
+        width: 140px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="control-panel">
+      <div>
+        <label>Radius</label>
+        <input id="radius" type="range" min="1000" max="20000" step="1000" value="1000"></input>
+        <span id="radius-value"></span>
+      </div>
+      <div>
+        <label>Coverage</label>
+        <input id="coverage" type="range" min="0" max="1" step="0.1" value="1"></input>
+        <span id="coverage-value"></span>
+      </div>
+      <div>
+        <label>Upper Percentile</label>
+        <input id="upperPercentile" type="range" min="90" max="100" step="1" value="100"></input>
+        <span id="upperPercentile-value"></span>
+      </div>
+    </div>
+  </body>
+
+  <script type="text/javascript">
+
+   
+ var scrubbed = [];
+var avgTime = 0;
+var count=0;
+ function getProcessedData(dataArray){
+				//initialize and array to hold locations user stayed longer than 15min
+				//console.log(data); 
+						function distance(lat1, lon1, lat2, lon2) {
+									if ((lat1 == lat2) && (lon1 == lon2)) {
+									return 0;
+										}
+									else {
+										var radlat1 = Math.PI * lat1/180;
+										var radlat2 = Math.PI * lat2/180;
+										var theta = lon1-lon2;
+										var radtheta = Math.PI * theta/180;
+										var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+									if (dist > 1) {
+											dist = 1;
+										}
+									dist = Math.acos(dist);
+									dist = dist * 180/Math.PI;
+									dist = dist * 60 * 1.1515;
+									return dist;
+									}
+									
+						}
+		
+						function getLat(d){
+							try {
+								return +d.lat;
+							} catch (e) {
+							return 0;
+							}
+						}
+						function getLong(d){
+							try {
+								return +d.lngitude;
+							} catch (e) {
+								return 0;
+							}
+						}
+						function getTime(d){
+						try {
+							return +d.time;
+						} catch (e) {
+								return 0;
+							}
+						}
+						function setTime(d, newTime){
+								d.time=newTime;
+						}
+		
+				var i =0;
+				var j = 171069;
+				console.log("Log before loop");
+				while(i<j){//loop thru data array finding places that I stayed longer than 15min
+				// console.log("Log during first loop");
+					if((getLong(dataArray[i])!== 0) && (getTime(dataArray[i])!== 0) && (getLat(dataArray[i])!==0) ){
+							var startLat = getLat(dataArray[i]);				//create the initial variables to be tested against in the following loop
+							var startLong =getLong(dataArray[i]);
+							var startTime =getTime(dataArray[i]);
+							var k=i +1;				//create the initial index to start test to see how long user stayed in location
+							var tempLat = getLat(dataArray[k]);
+							var tempLong =getLong(dataArray[k]);
+							var endTime = getTime(dataArray[k]);
+							var dis = distance(startLat, startLong, tempLat, tempLong);
+	
+							while(((tempLat!= 0) && (endTime!= 0) && (tempLong!=0) ) && ( distance(startLat, startLong, tempLat, tempLong)< .1)){//loop until a value is found that is more than 50 meters away from the location of data[i]
+									tempLat = getLat(dataArray[k]);
+									tempLong = getLong(dataArray[k]);
+									endTime = getTime(dataArray[k]);	
+									k++; //push test index foward
+						
+								}//end comparison loop
+				
+							i=k;
+				
+	
+							var testTime = endTime - startTime;		//var holding difference between starting time and ending time
+							var testVar = 122
+							if(startTime!=0 && endTime!=0){
+								var testTime = (endTime - startTime)* -1;	
+				
+							}
+							if(testTime>900000 && testTime<1400000000000){
+								avgTime+=testTime;
+								testIf =true;
+								dataArray[k].time =testTime;
+								scrubbed.push(dataArray[k]);
+							}
+		
+			
+						}
+
+		
+						i++;
+	
+					}//end total array loop
+					
+					i=0;
+					while(i<scrubbed.length){//initial loop to scrub nulls
+						var testVar = scrubbed[i];
+						k=i;
+						while(k<scrubbed.length){
+							if(scrubbed[k]==testVar)
+								scrubbed.splice(i,1);
+							
+								k++;
+						}
+						i++;
+					}
+			avgTime=(avgTime/count);
+			console.log("scrubbed" + scrubbed);
+			return(scrubbed);
+	}
+ 
+ 
+ //end function to process data
+ 
+
+
+d3.csv("data.csv", function(d) {
+  return {
+    lat: +d.lat, // convert "Length" column to number
+	lngitude: +d.lng, // convert "Length" column to number
+	time: +d.time,
+  }; 
+}).then(function(data){
+	console.log("data "+data);
+	var plsBB = getProcessedData(data);
+	console.log(plsBB);
+	
+	//Pritheee those that haplessly wander further, then code runeth deep into crazy shit territory that is both un holier and has more spaghetti than c'thulu him self
+	
+	
+	//yee've been warned
+	
+mapboxgl.accessToken = 'pk.eyJ1IjoiZWxhbGRlbiIsImEiOiJjazFndDBubWkwMDQ4M25xajR2OTZhcnU0In0.daJrZmKDBU42uDU1EZuIBA';
+
+var { MapboxLayer, HexagonLayer } = deck;
+
+//Create the Mapbox map
+var map = new mapboxgl.Map({
+    container: document.body,
+    style: 'mapbox://styles/mapbox/dark-v10?optimize=true',
+    center: [-92.3407192, 34.7263117],
+    zoom: 6,
+    pitch: 40.5,
+    antialias: true
+});
+
+// Get Data for visual
+var DATA_URL = 'https://raw.githubusercontent.com/uber-common/deck.gl-data/master/examples/3d-heatmap/heatmap-data.csv';
+
+//Create the deck.gl hexagon layer and style for the data
+var OPTIONS = ['radius', 'coverage', 'upperPercentile'];
+var COLOR_RANGE = [
+    [1, 152, 189],
+    [73, 227, 206],
+    [216, 254, 181],
+    [254, 237, 177],
+    [254, 173, 84],
+    [209, 55, 78]
+];
+var LIGHT_SETTINGS = {
+    lightsPosition: [-0.144528, 49.739968, 8000, -3.807751, 54.104682, 8000],
+    ambientRatio: 0.4,
+    diffuseRatio: 0.6,
+    specularRatio: 0.2,
+    lightsStrength: [0.8, 0.0, 0.8, 0.0],
+    numberOfLights: 2
+};
+
+var hexagonLayer;
+
+//Add the deck.gl Custom Layer to the map once the Mapbox map loads
+map.on('style.load', () => {
+var plsBB = getProcessedData(data)
+//console.log(plsBB);
+
+
+
+
+
+function convertArrayOfObjectsToCSV(args) {
+        var result, ctr, keys, columnDelimiter, lineDelimiter, data;
+
+        data = plsBB;
+        if (data == null || !data.length) {
+            return null;
+        }
+
+        columnDelimiter = args.columnDelimiter || ',';
+        lineDelimiter = args.lineDelimiter || '\n';
+
+        keys = Object.keys(data[0]);
+
+        result = '';
+        result += keys.join(columnDelimiter);
+        result += lineDelimiter;
+
+        data.forEach(function(item) {
+            ctr = 0;
+            keys.forEach(function(key) {
+                if (ctr > 0) result += columnDelimiter;
+
+                result += item[key];
+                ctr++;
+            });
+            result += lineDelimiter;
+        });
+
+        return result;
+}
+
+function downloadCSV(args) {
+        var data, filename, link;
+
+        var csv = convertArrayOfObjectsToCSV({
+            data: plsBB
+        });
+        if (csv == null) return;
+
+        filename = args.filename || 'export.csv';
+
+        if (!csv.match(/^data:text\/csv/i)) {
+            csv = 'data:text/csv;charset=utf-8,' + csv;
+        }
+        data = encodeURI(csv);
+
+        link = document.createElement('a');
+        link.setAttribute('href', data);
+        link.setAttribute('download', filename);
+        link.click();
+}
+
+downloadCSV({ filename: "stock-data.csv" });
+
+
+
+
+
+
+    hexagonLayer = new MapboxLayer({
+        type: HexagonLayer,
+        id: 'heatmap',
+        data: plsBB,
+        radius: 1000,
+        coverage: 1,
+        upperPercentile: 100,
+        colorRange: COLOR_RANGE,
+        elevationRange: [0, 1000],
+        elevationScale: 250,
+        extruded: true,
+        getPosition: d => [ d.latitude,d.lngitude],
+        lightSettings: LIGHT_SETTINGS,
+        opacity: 1
+    });
+
+    // Add the deck.gl hex layer below labels in the Mapbox map
+    map.addLayer(hexagonLayer, 'waterway-label');
+});
+
+// Add sliders to change the layer's settings based on user input
+OPTIONS.forEach(key => {
+    document.getElementById(key).onchange = (evt) => {
+        var value = Number(evt.target.value);
+        document.getElementById(key + '-value').innerHTML = value;
+        if (hexagonLayer) {
+            hexagonLayer.setProps({
+                [key]: value });
+        }
+    };
+});
+});
+
+ 
+
+
+
+  </script>
+</html>
